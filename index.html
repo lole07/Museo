@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -82,7 +83,7 @@ body.guided #joy{display:none!important}
   <h1>MUSEO VIRTUAL</h1>
   <p>Tres pisos y doce salas llenas de pinturas, esculturas y obras 3D para descubrir. Entra en modo VR para recorrer el museo en Meta Quest.</p>
   <p class="kb">Exploración libre: WASD/flechas · arrastra para mirar · clic en cualquier cuadro para acercarte</p>
-  <p>Meta Quest: abre esta página en Quest Browser y pulsa «ENTRAR EN VR». Joystick izquierdo: caminar · joystick derecho: girar · gatillo sobre una obra: acercarte y ver su ficha · gatillo sobre el suelo (círculo verde): ir allí · A / B: obra siguiente / anterior · X / Y o agarre: traer el panel · botón «3D» del panel (o clic del joystick derecho): abrir el modelo de Sketchfab y navegar dentro de la obra; allí pulsa «Volver al museo en VR».</p>
+  <p>Meta Quest: abre esta página en Quest Browser y pulsa «ENTRAR EN VR». Joystick izquierdo: caminar · joystick derecho: girar · gatillo sobre una obra: acercarte y ver su ficha · gatillo sobre el suelo (círculo verde): ir allí · A / B: obra siguiente / anterior · X / Y o agarre: traer el panel · botón «3D» del panel (o clic del joystick derecho): ver el modelo de Sketchfab dentro de VR (joystick derecho: girar · izquierdo adelante/atrás: tamaño · A/B o «Salir del 3D»: volver).</p>
   <button id="go">ENTRAR</button>
 </div>
 
@@ -472,7 +473,9 @@ async function checkVRSupport(){
  try{const ok=await navigator.xr.isSessionSupported('immersive-vr');if(!ok){vrBtn.disabled=true;vrBtn.textContent='VR no disponible'}}catch(e){vrBtn.disabled=true;vrBtn.textContent='VR no disponible'}
 }
 checkVRSupport();
-let vrReturn=null,resumeVR=false;
+let vrReturn=null,resumeVR=false,modelMode=false,modelLoading=false,stage=null;
+/* Token de la API de Sketchfab (sketchfab.com/settings#password → API token). Se puede pegar aquí o pasar en la URL con ?sftoken=XXXX */
+const SF_TOKEN=new URLSearchParams(location.search).get('sftoken')||'';
 async function startVR(){
  if(!navigator.xr){alert('Para usar Meta Quest, publica este archivo en una dirección HTTPS y ábrelo con Quest Browser.');return}
  try{
@@ -483,7 +486,7 @@ async function startVR(){
   cam.position.set(0,0,0);cam.rotation.set(0,0,0);yaw=0;pitch=0;tw=null;
   yOff=0;xrFrames=0;rig.position.set(sx,floors[cf].y,sz);rig.rotation.set(0,sy,0);hudPlace=true;hudWait=2;
   await renderer.xr.setSession(xrSession);document.body.classList.add('xr-mode');vrBtn.textContent='VR ACTIVO';
-  xrSession.addEventListener('end',()=>{document.body.classList.remove('xr-mode');rig.position.set(0,0,0);rig.rotation.set(0,0,0);xrSession=null;resize();show(cf);vrBtn.textContent='ENTRAR EN VR'});
+  xrSession.addEventListener('end',()=>{exitModelVR();document.body.classList.remove('xr-mode');rig.position.set(0,0,0);rig.rotation.set(0,0,0);xrSession=null;resize();show(cf);vrBtn.textContent='ENTRAR EN VR'});
  }catch(e){console.error(e);alert('No se pudo iniciar VR. Abre el museo desde Meta Quest Browser usando HTTPS y permite el acceso a VR.');}
 }
 vrBtn.addEventListener('click',startVR);
@@ -528,6 +531,7 @@ function aim(c){ // ¿a qué apunta este mando?
  const hb=ray.intersectObjects(hudBtns.filter(m=>m.visible))[0];
  if(hb)res={k:'hud',d:hb.distance,m:hb.object};
  else{
+  if(modelMode){res={k:'none',d:6};ray.far=45;return res}
   const h=ray.intersectObjects(floors[cf].solid,true)[0];
   let ft=Infinity,fp=null;
   if(dir.y<-.02){const t=(floors[cf].y-o.y)/dir.y;if(t>0&&t<25){ft=t;fp=new T.Vector3().copy(o).addScaledVector(dir,t)}}
@@ -581,9 +585,10 @@ mkHud('◀',.3,.12,-.62,()=>step(-1));mkHud('▶',.3,.12,.62,()=>step(1));
 [hudC,hudT]=mkHud('',.9,.12,0,null);
 let activeModelId='';let hud3DC,hud3DT;
 [hud3DC,hud3DT]=mkHud('3D ▶',.4,.12,1.22,()=>open3DFromVR());const hud3DBtn=hudBtns[hudBtns.length-1];hud3DBtn.visible=false; // el visor web no se ve dentro del casco: se sale de VR, se abre el visor y se vuelve con un botón
+const hudExitBtnArr=mkHud('✕ Salir del 3D',.7,.12,0,()=>exitModelVR(),-.16);const hudExitBtn=hudBtns[hudBtns.length-1];hudExitBtn.visible=false;
 const hudFl=[];for(let k=0;k<ACTIVE_FLOORS;k++)hudFl.push(mkHud('P'+(k+1),.2,.1,(k-(ACTIVE_FLOORS-1)/2)*.24,()=>gotoFloor(k),-.16));
 function updateFloorHud(){hudFl.forEach(([c,t],k)=>{lbl(c,(k===cf?'● ':'')+'P'+(k+1));t.needsUpdate=true})}
-function gotoFloor(i){if(i===cf)return;if(renderer.xr.isPresenting)show(i);else{fade.style.opacity=1;setTimeout(()=>{show(i);fade.style.opacity=0},280)}}
+function gotoFloor(i){if(modelMode||i===cf)return;if(renderer.xr.isPresenting)show(i);else{fade.style.opacity=1;setTimeout(()=>{show(i);fade.style.opacity=0},280)}}
 // Ficha de la obra dentro del casco
 const infoC=mkCanvas(1100,520),infoT=new T.CanvasTexture(infoC);
 const infoM=new T.Mesh(new T.PlaneGeometry(1.4,1.4*520/1100),new T.MeshBasicMaterial({map:infoT,transparent:true,depthTest:false,fog:false}));
@@ -610,14 +615,74 @@ function setHudInfo(it){
  g.fillStyle='#f3ede2';g.font='27px Georgia';y+=44;wrapTxt(g,a.desc,36,y,W-72,35,Math.max(2,Math.floor((Hh-y-24)/35)+1));
  infoT.needsUpdate=true;infoM.visible=true;
 }
-function setHud3D(id){activeModelId=id||'';lbl(hud3DC,'3D ▶');hud3DT.needsUpdate=true;hud3DBtn.visible=!!activeModelId}
+function setHud3D(id){activeModelId=id||'';lbl(hud3DC,'3D ▶');hud3DT.needsUpdate=true;hud3DBtn.visible=!!activeModelId&&!modelMode}
+function hudMsg(t){lbl(hudC,t);hudT.needsUpdate=true}
+function setHudMode(on){hudBtns.forEach(m=>{m.visible=on?m===hudExitBtn:(m!==hudExitBtn&&(m!==hud3DBtn||!!activeModelId))})}
 // Abrir el Sketchfab desde VR: se cierra la sesión inmersiva (el iframe no se puede mostrar dentro del casco),
 // se abre el visor en la ventana del navegador y el botón «Volver al museo en VR» reentra frente a la misma obra.
 async function open3DFromVR(){
- if(!activeModelId)return;
- const id=activeModelId;vrReturn=cur||null;resumeVR=true;
+ if(!activeModelId||modelLoading||modelMode)return;
+ const id=activeModelId,title=cur?cur.info.title:'';
+ modelLoading=true;hudMsg(SF_TOKEN?'Cargando 3D…':'Sin token de Sketchfab');
+ try{
+  const m=await fetchSketchfabModel(id);modelLoading=false;
+  if(renderer.xr.isPresenting){enterModelVR(m,title);return}
+ }catch(e){console.warn('3D dentro de VR no disponible:',e);modelLoading=false;hudMsg('Sin descarga · abriendo visor web');await new Promise(r=>setTimeout(r,1100))}
+ // Alternativa: salir de VR un momento, abrir el visor web y volver con un botón
+ vrReturn=cur||null;resumeVR=true;
  try{const ss=renderer.xr.getSession();if(ss)await ss.end()}catch(e){console.warn(e)}
  setTimeout(()=>openViewer(id),200);
+}
+/* ---- Modelo 3D de Sketchfab DENTRO de VR (sin salir de la sesión) ---- */
+const modelCache={};
+function loadScript(src){return new Promise((ok,ko)=>{if(window.JSZip)return ok();const e=document.createElement('script');e.src=src;e.onload=ok;e.onerror=ko;document.head.appendChild(e)})}
+async function fetchSketchfabModel(id){
+ if(modelCache[id])return modelCache[id];
+ if(!SF_TOKEN)throw new Error('Falta el token de Sketchfab');
+ const r=await fetch('https://api.sketchfab.com/v3/models/'+id+'/download',{headers:{Authorization:'Token '+SF_TOKEN}});
+ if(!r.ok)throw new Error('API de descarga: '+r.status+' (¿modelo no descargable?)');
+ const d=await r.json();if(!d.gltf||!d.gltf.url)throw new Error('El modelo no ofrece glTF');
+ if(d.gltf.size>150e6)throw new Error('Modelo demasiado pesado para el casco');
+ await loadScript('https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js');
+ const zr=await fetch(d.gltf.url);if(!zr.ok)throw new Error('Descarga del zip: '+zr.status);
+ const zip=await JSZip.loadAsync(await zr.arrayBuffer());
+ const urls={};let main=null;
+ for(const name of Object.keys(zip.files)){const f=zip.files[name];if(f.dir)continue;
+  urls[name]=URL.createObjectURL(new Blob([await f.async('arraybuffer')]));
+  if(!main&&/\.gltf$/i.test(name))main=name}
+ if(!main)throw new Error('El zip no contiene .gltf');
+ const base=main.includes('/')?main.slice(0,main.lastIndexOf('/')+1):'';
+ const text=await zip.file(main).async('string');
+ const mgr=new T.LoadingManager();
+ mgr.setURLModifier(u=>{if(/^(blob:|data:|https?:)/.test(u))return u;const k=decodeURIComponent(u).replace(/^\.\//,'');return urls[base+k]||urls[k]||u});
+ const gltf=await new Promise((ok,ko)=>new T.GLTFLoader(mgr).parse(text,'',ok,ko));
+ modelCache[id]=gltf.scene;return gltf.scene;
+}
+function enterModelVR(model,title){
+ modelMode=true;floors.forEach(f=>f.g.visible=false);
+ stage=new T.Group();
+ stage.add(new T.HemisphereLight(0xffffff,0x3a342c,1.15));
+ const dl=new T.DirectionalLight(0xffffff,1.3);dl.position.set(2,4,3);stage.add(dl);
+ const dl2=new T.DirectionalLight(0xffe2b0,.6);dl2.position.set(-3,2,-2);stage.add(dl2);
+ const disc=new T.Mesh(new T.CylinderGeometry(1,1,.03,48),new T.MeshStandardMaterial({color:0x2b2620,roughness:.8}));disc.position.y=.015;stage.add(disc);
+ const box=new T.Box3().setFromObject(model),sz=box.getSize(new T.Vector3()),ctr=box.getCenter(new T.Vector3());
+ const sc=1.3/(Math.max(sz.x,sz.y,sz.z)||1);
+ model.position.set(-ctr.x,-ctr.y,-ctr.z);
+ const pivot=new T.Group();pivot.add(model);pivot.scale.setScalar(sc);pivot.position.y=.9+sz.y*sc/2;
+ stage.add(pivot);stage.userData.pivot=pivot;
+ const l=Math.hypot(headD.x,headD.z)||1;
+ stage.position.set(headW.x+headD.x/l*2,rig.position.y,headW.z+headD.z/l*2);
+ scene.add(stage);setHudMode(true);hudMsg(String(title).slice(0,26));hudPlace=true;hudWait=0;showCard(null);
+}
+function exitModelVR(){
+ if(!modelMode)return;modelMode=false;
+ if(stage){scene.remove(stage);stage=null}
+ floors[cf].g.visible=true;setHudMode(false);setHud3D(activeModelId);updateNav();hudPlace=true;hudWait=0;
+}
+function modelTick(dt,tx,my){ // palanca derecha: girar · palanca izquierda adelante/atrás: agrandar/reducir
+ if(!stage)return;const pv=stage.userData.pivot;
+ pv.rotation.y-=tx*dt*2.2;
+ if(my){const k=Math.max(.15,Math.min(6,pv.scale.x*(1-my*dt*.9)));pv.scale.setScalar(k)}
 }
 function updateNav(){
  const t=tourIdx>=0?TOUR[tourIdx]:null;
@@ -631,7 +696,7 @@ function goTo(i){
  if(t.fi!==cf){fade.style.opacity=1;setTimeout(()=>{show(t.fi);approach(t.it);showCard(t.it);fade.style.opacity=0},280)}
  else{approach(t.it);showCard(t.it)}
 }
-const step=d=>goTo(tourIdx<0?(d>0?0:TOUR.length-1):tourIdx+d);
+const step=d=>modelMode?0:goTo(tourIdx<0?(d>0?0:TOUR.length-1):tourIdx+d);
 const toggleList=v=>listEl.classList.toggle('on',v);
 (()=>{let lf=-1,lr='';listEl.innerHTML='<h3>OBRAS</h3>';
  TOUR.forEach((t,i)=>{
@@ -674,8 +739,9 @@ function vrTick(dt){
  if(Ls&&Rs){[mx,my]=stickOf(Ls.gamepad);tx=stickOf(Rs.gamepad)[0]}
  else if(gps.length){const s=stickOf(gps[0].gamepad);tx=s[0];my=s[1]} // un solo mando: Y camina, X gira
  tx=dzn(tx);mx=dzn(mx);my=dzn(my);
- if(Math.abs(tx)>.7){if(!trLatch){trLatch=true;turnRig(tx>0?-P/6:P/6)}}else if(Math.abs(tx)<.3)trLatch=false;
- if(mx||my){
+ if(modelMode)modelTick(dt,tx,my);
+ if(!modelMode&&Math.abs(tx)>.7){if(!trLatch){trLatch=true;turnRig(tx>0?-P/6:P/6)}}else if(Math.abs(tx)<.3)trLatch=false;
+ if(!modelMode&&(mx||my)){
   let fx=headD.x,fz=headD.z;const fl=Math.hypot(fx,fz);
   if(fl<.2){fx=-Math.sin(rig.rotation.y);fz=-Math.cos(rig.rotation.y)}else{fx/=fl;fz/=fl}
   let vx=fx*(-my)+(-fz)*mx,vz=fz*(-my)+fx*mx;const vl=Math.hypot(vx,vz);if(vl>1){vx/=vl;vz/=vl}
@@ -686,10 +752,13 @@ function vrTick(dt){
  for(const src of gps){
   const b=src.gamepad.buttons,r=src.handedness==='right',ka=r?'ra':'la',kb=r?'rb':'lb';
   const pa=!!(b[4]&&b[4].pressed),pb=!!(b[5]&&b[5].pressed);
+  if(modelMode){if((pa&&!btnLatch[ka])||(pb&&!btnLatch[kb]))exitModelVR()}
+  else{
   if(pa&&!btnLatch[ka]){if(r)step(1);else{hudPlace=true;hudWait=0}}
   if(pb&&!btnLatch[kb]){if(r)step(-1);else{hudPlace=true;hudWait=0}}
+  }
   const ps=!!(b[3]&&b[3].pressed),kp=r?'rs':'ls';
-  if(r&&ps&&!btnLatch[kp]&&activeModelId)open3DFromVR();
+  if(r&&ps&&!btnLatch[kp]){if(modelMode)exitModelVR();else if(activeModelId)open3DFromVR()}
   btnLatch[ka]=pa;btnLatch[kb]=pb;btnLatch[kp]=ps;
  }
  // rayos: se acortan al tocar algo y cambian de color; círculo verde = punto al que puedes ir
