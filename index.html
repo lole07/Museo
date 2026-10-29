@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Museo Virtual · Meta Quest</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud"><b>MUSEO VIRTUAL</b><span id="loc"></span><span class="kb">WASD/flechas · arrastra para mirar · Shift corre</span><span>Explora libremente y haz clic en cualquier cuadro para acercarte y abrir su ficha</span></div>
+<div id="ui"><button id="vrBtn">ENTRAR EN VR</button><button data-f="0">Piso 1</button><button data-f="1">Piso 2</button><button data-f="2">Piso 3</button><button id="lt"></button><button id="mu">♪ Música</button><button id="gd" class="on">Modo guiado</button><button id="lb">☰ Obras</button></div>
+<div id="nav"><button id="pv">◀ Anterior</button><span id="navLbl"></span><button id="nx">Siguiente ▶</button></div><div id="list"></div>
+<div id="card"></div><div id="viewer"><button id="vx">✕ Cerrar</button><iframe title="Obra en 3D" allow="autoplay; fullscreen; xr-spatial-tracking" allowfullscreen></iframe></div><div id="joy"><i></i></div><div id="fade"></div>
+
+<div id="start">
+  <h1>MUSEO VIRTUAL</h1>
+  <p>Tres pisos y doce salas llenas de pinturas, esculturas y obras 3D para descubrir. Entra en modo VR para recorrer el museo en Meta Quest.</p>
+  <p class="kb">Exploración libre: WASD/flechas · arrastra para mirar · clic en cualquier cuadro para acercarte</p>
+  <p>Meta Quest: abre esta página en Quest Browser y pulsa «ENTRAR EN VR». Apunta con un mando y pulsa el gatillo sobre una obra para acercarte.</p>
+  <button id="go">ENTRAR</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
