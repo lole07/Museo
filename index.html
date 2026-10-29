@@ -60,6 +60,9 @@ body.guided #joy{display:none!important}
 #viewer.on{display:block}
 #viewer iframe{width:100%;height:100%;border:0}
 #vx{position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);left:10px;z-index:2;font:inherit;font-size:14px;padding:8px 14px;background:rgba(20,17,15,.9);color:var(--fg);border:1px solid var(--ac);border-radius:4px;cursor:pointer}
+#vr2{display:none;position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);right:10px;z-index:2;font:inherit;font-size:16px;font-weight:bold;padding:12px 20px;background:var(--ac);color:#14110f;border:1px solid var(--ac);border-radius:4px;cursor:pointer}
+#viewer.from-vr #vr2{display:block}
+#vx{font-size:16px!important;padding:12px 20px!important}
 #fade{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity .25s}
 #start{position:fixed;inset:0;background:radial-gradient(circle,#2a221b,#0d0b09);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;z-index:5}
 #start h1{font-weight:normal;letter-spacing:.25em;color:var(--ac);margin:0 0 10px;font-size:clamp(24px,6vw,44px)}
@@ -73,13 +76,13 @@ body.guided #joy{display:none!important}
 <div id="hud"><b>MUSEO VIRTUAL</b><span id="loc"></span><span class="kb">WASD/flechas · arrastra para mirar · Shift corre</span><span>Explora libremente y haz clic en cualquier cuadro para acercarte y abrir su ficha</span></div>
 <div id="ui"><button id="vrBtn">ENTRAR EN VR</button><button data-f="0">Piso 1</button><button data-f="1">Piso 2</button><button data-f="2">Piso 3</button><button id="lt"></button><button id="mu">♪ Música</button><button id="gd" class="on">Modo guiado</button><button id="lb">☰ Obras</button></div>
 <div id="nav"><button id="pv">◀ Anterior</button><span id="navLbl"></span><button id="nx">Siguiente ▶</button></div><div id="list"></div>
-<div id="card"></div><div id="viewer"><button id="vx">✕ Cerrar</button><iframe title="Obra en 3D" allow="autoplay; fullscreen; xr-spatial-tracking" allowfullscreen></iframe></div><div id="joy"><i></i></div><div id="fade"></div>
+<div id="card"></div><div id="viewer"><button id="vx">✕ Cerrar</button><button id="vr2">🥽 Volver al museo en VR</button><iframe title="Obra en 3D" allow="autoplay; fullscreen; xr-spatial-tracking" allowfullscreen></iframe></div><div id="joy"><i></i></div><div id="fade"></div>
 
 <div id="start">
   <h1>MUSEO VIRTUAL</h1>
   <p>Tres pisos y doce salas llenas de pinturas, esculturas y obras 3D para descubrir. Entra en modo VR para recorrer el museo en Meta Quest.</p>
   <p class="kb">Exploración libre: WASD/flechas · arrastra para mirar · clic en cualquier cuadro para acercarte</p>
-  <p>Meta Quest: abre esta página en Quest Browser y pulsa «ENTRAR EN VR». Joystick izquierdo: caminar · joystick derecho: girar · gatillo sobre una obra: acercarte y ver su ficha · gatillo sobre el suelo (círculo verde): ir allí · A / B: obra siguiente / anterior · X / Y o agarre: traer el panel.</p>
+  <p>Meta Quest: abre esta página en Quest Browser y pulsa «ENTRAR EN VR». Joystick izquierdo: caminar · joystick derecho: girar · gatillo sobre una obra: acercarte y ver su ficha · gatillo sobre el suelo (círculo verde): ir allí · A / B: obra siguiente / anterior · X / Y o agarre: traer el panel · botón «3D» del panel (o clic del joystick derecho): abrir el modelo de Sketchfab y navegar dentro de la obra; allí pulsa «Volver al museo en VR».</p>
   <button id="go">ENTRAR</button>
 </div>
 
@@ -469,7 +472,8 @@ async function checkVRSupport(){
  try{const ok=await navigator.xr.isSessionSupported('immersive-vr');if(!ok){vrBtn.disabled=true;vrBtn.textContent='VR no disponible'}}catch(e){vrBtn.disabled=true;vrBtn.textContent='VR no disponible'}
 }
 checkVRSupport();
-vrBtn.addEventListener('click',async()=>{
+let vrReturn=null,resumeVR=false;
+async function startVR(){
  if(!navigator.xr){alert('Para usar Meta Quest, publica este archivo en una dirección HTTPS y ábrelo con Quest Browser.');return}
  try{
   const ok=await navigator.xr.isSessionSupported('immersive-vr');if(!ok)throw new Error('Este navegador no ofrece immersive-vr.');
@@ -481,7 +485,8 @@ vrBtn.addEventListener('click',async()=>{
   await renderer.xr.setSession(xrSession);document.body.classList.add('xr-mode');vrBtn.textContent='VR ACTIVO';
   xrSession.addEventListener('end',()=>{document.body.classList.remove('xr-mode');rig.position.set(0,0,0);rig.rotation.set(0,0,0);xrSession=null;resize();show(cf);vrBtn.textContent='ENTRAR EN VR'});
  }catch(e){console.error(e);alert('No se pudo iniciar VR. Abre el museo desde Meta Quest Browser usando HTTPS y permite el acceso a VR.');}
-});
+}
+vrBtn.addEventListener('click',startVR);
 
 /* ---- Ir frente a una obra ---- */
 function teleportXR(it){ // te coloca frente a la obra, mirándola
@@ -575,7 +580,7 @@ function mkHud(txt,w,h,x,act,y=0){
 mkHud('◀',.3,.12,-.62,()=>step(-1));mkHud('▶',.3,.12,.62,()=>step(1));
 [hudC,hudT]=mkHud('',.9,.12,0,null);
 let activeModelId='';let hud3DC,hud3DT;
-[hud3DC,hud3DT]=mkHud('3D',.32,.12,1.18,()=>{});hudBtns[hudBtns.length-1].visible=false; // el visor web no se ve dentro del casco
+[hud3DC,hud3DT]=mkHud('3D ▶',.4,.12,1.22,()=>open3DFromVR());const hud3DBtn=hudBtns[hudBtns.length-1];hud3DBtn.visible=false; // el visor web no se ve dentro del casco: se sale de VR, se abre el visor y se vuelve con un botón
 const hudFl=[];for(let k=0;k<ACTIVE_FLOORS;k++)hudFl.push(mkHud('P'+(k+1),.2,.1,(k-(ACTIVE_FLOORS-1)/2)*.24,()=>gotoFloor(k),-.16));
 function updateFloorHud(){hudFl.forEach(([c,t],k)=>{lbl(c,(k===cf?'● ':'')+'P'+(k+1));t.needsUpdate=true})}
 function gotoFloor(i){if(i===cf)return;if(renderer.xr.isPresenting)show(i);else{fade.style.opacity=1;setTimeout(()=>{show(i);fade.style.opacity=0},280)}}
@@ -605,7 +610,15 @@ function setHudInfo(it){
  g.fillStyle='#f3ede2';g.font='27px Georgia';y+=44;wrapTxt(g,a.desc,36,y,W-72,35,Math.max(2,Math.floor((Hh-y-24)/35)+1));
  infoT.needsUpdate=true;infoM.visible=true;
 }
-function setHud3D(id){activeModelId=id||'';lbl(hud3DC,activeModelId?'3D':'—');hud3DT.needsUpdate=true}
+function setHud3D(id){activeModelId=id||'';lbl(hud3DC,'3D ▶');hud3DT.needsUpdate=true;hud3DBtn.visible=!!activeModelId}
+// Abrir el Sketchfab desde VR: se cierra la sesión inmersiva (el iframe no se puede mostrar dentro del casco),
+// se abre el visor en la ventana del navegador y el botón «Volver al museo en VR» reentra frente a la misma obra.
+async function open3DFromVR(){
+ if(!activeModelId)return;
+ const id=activeModelId;vrReturn=cur||null;resumeVR=true;
+ try{const ss=renderer.xr.getSession();if(ss)await ss.end()}catch(e){console.warn(e)}
+ setTimeout(()=>openViewer(id),200);
+}
 function updateNav(){
  const t=tourIdx>=0?TOUR[tourIdx]:null;
  navLbl.textContent=(tourIdx+1)+' / '+TOUR.length;
@@ -646,6 +659,7 @@ function vrTick(dt){
  headW.setFromMatrixPosition(xc.matrixWorld);headD.set(0,0,-1).transformDirection(xc.matrixWorld);
  if(xrFrames<6)return; // esperar a que el visor entregue la primera pose
  if(xrFrames===6){if(headW.y-rig.position.y<.6){yOff=EYE;rig.position.y+=EYE}hudPlace=true;hudWait=0} // sin suelo detectado: sube a la altura de los ojos
+ if(xrFrames===6&&vrReturn){const it=vrReturn;vrReturn=null;teleportXR(it);showCard(it)} // al volver del visor 3D: frente a la misma obra
  if(hudFloorShown!==cf){hudFloorShown=cf;updateFloorHud()}
  // panel flotante: se coloca frente a ti y te sigue si te alejas
  if(hudWait>0)hudWait--;
@@ -674,7 +688,9 @@ function vrTick(dt){
   const pa=!!(b[4]&&b[4].pressed),pb=!!(b[5]&&b[5].pressed);
   if(pa&&!btnLatch[ka]){if(r)step(1);else{hudPlace=true;hudWait=0}}
   if(pb&&!btnLatch[kb]){if(r)step(-1);else{hudPlace=true;hudWait=0}}
-  btnLatch[ka]=pa;btnLatch[kb]=pb;
+  const ps=!!(b[3]&&b[3].pressed),kp=r?'rs':'ls';
+  if(r&&ps&&!btnLatch[kp]&&activeModelId)open3DFromVR();
+  btnLatch[ka]=pa;btnLatch[kb]=pb;btnLatch[kp]=ps;
  }
  // rayos: se acortan al tocar algo y cambian de color; círculo verde = punto al que puedes ir
  let rv=false;
@@ -693,9 +709,10 @@ document.querySelectorAll('[data-f]').forEach(b=>{if(+b.dataset.f>=ACTIVE_FLOORS
 
 /* ---- Visor 3D integrado: conserva «Ver en 3D» y elimina el enlace externo ---- */
 const vw=document.getElementById('viewer'),vf=vw.querySelector('iframe');
-function openViewer(id){vf.src='https://sketchfab.com/models/'+id+'/embed?autostart=1&ui_theme=dark';vw.classList.add('on')}
-function closeViewer(){vw.classList.remove('on');vf.src='about:blank'}
-document.getElementById('vx').onclick=closeViewer;
+function openViewer(id){vf.src='https://sketchfab.com/models/'+id+'/embed?autostart=1&ui_theme=dark';vw.classList.toggle('from-vr',resumeVR);vw.classList.add('on')}
+function closeViewer(){vw.classList.remove('on','from-vr');vf.src='about:blank';resumeVR=false}
+document.getElementById('vx').onclick=()=>{vrReturn=null;closeViewer()};
+document.getElementById('vr2').onclick=()=>{closeViewer();startVR()}; // el clic es el gesto que exige WebXR para reentrar
 addEventListener('keydown',e=>{if(e.code==='Escape')closeViewer()});
 card.addEventListener('click',e=>{const a=e.target.closest('[data-embed]');if(a){e.preventDefault();const id=a.dataset.embed;if(id)openViewer(id)}});
 
