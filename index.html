@@ -1,4 +1,4 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="utf-8">
@@ -649,14 +649,14 @@ function tap(x,y){
 }
 
 /* ---- Mandos VR: rayo + gatillo (elegir obra, pulsar botones del panel o teletransportarse al suelo) ---- */
-const xrControllers=[];
+const xrControllers=[],xrGrips=[];let hudPin=false,hudCtl=null,hudCtlC=null;const _p2=new T.Vector3(),_n2=new T.Vector3(),_h2=new T.Vector3();
 const reticle=new T.Mesh(new T.RingGeometry(.16,.24,32).rotateX(-P/2),new T.MeshBasicMaterial({color:0x8cffb0,transparent:true,opacity:.9,depthTest:false,fog:false}));
 reticle.renderOrder=998;reticle.visible=false;scene.add(reticle);
 function aimRay(c){c.updateWorldMatrix(true,false);ray.ray.origin.setFromMatrixPosition(c.matrixWorld);ray.ray.direction.set(0,0,-1).transformDirection(c.matrixWorld)}
 function aim(c){ // ¿a qué apunta este mando?
  aimRay(c);ray.near=0;ray.far=40;
  const o=ray.ray.origin,dir=ray.ray.direction;let res=null;
- const hb=ray.intersectObjects(hudBtns.filter(m=>m.visible))[0];
+ const hb=(hud.visible&&c!==hudCtlC)?ray.intersectObjects(hudBtns.filter(m=>m.visible))[0]:null;
  if(hb)res={k:'hud',d:hb.distance,m:hb.object};
  else{
   if(modelMode){res={k:'none',d:6};ray.far=45;return res}
@@ -689,7 +689,7 @@ for(let i=0;i<2;i++){
  const grip=renderer.xr.getControllerGrip(i); // forma sencilla para ver dónde tienes la mano
  const body=new T.Mesh(new T.CylinderGeometry(.018,.024,.13,24).rotateX(P/2),new T.MeshBasicMaterial({color:0x2b2620}));
  const tip=new T.Mesh(new T.SphereGeometry(.03,14,10),new T.MeshBasicMaterial({color:0xd8b26a}));tip.position.z=-.07;
- grip.add(body);grip.add(tip);rig.add(grip);
+ grip.add(body);grip.add(tip);rig.add(grip);xrGrips[i]=grip;
  rig.add(controller);xrControllers.push(controller);
 }
 
@@ -840,12 +840,12 @@ addEventListener('keydown',e=>{if(e.repeat)return;
  else if(e.code==='PageUp'||(guided&&e.code==='ArrowLeft'))step(-1);
  else if(e.code==='KeyL')toggleList()});
 renderer.xr.addEventListener('sessionstart',()=>{xrFrames=0;hudPlace=true;hudWait=2});
-xrControllers.forEach(c=>c.addEventListener('squeezestart',()=>{hudPlace=true;hudWait=0})); // apretar el agarre = traer el panel frente a ti
+xrControllers.forEach(c=>c.addEventListener('squeezestart',()=>{hudPin=!hudPin})); // apretar el agarre = traer el panel frente a ti
 let trLatch=false,hudFloorShown=-1;const btnLatch={};
 const dzn=v=>Math.abs(v)<.18?0:v;
 const stickOf=g=>g.axes.length>=4?[g.axes[2],g.axes[3]]:[g.axes[0]||0,g.axes[1]||0];
 function vrTick(dt){
- const xr=renderer.xr.isPresenting;hud.visible=xr;
+ const xr=renderer.xr.isPresenting;if(!xr)hud.visible=false;
  if(!xr){reticle.visible=false;vig.visible=false;vgo=0;return}
  xrFrames++;
  const xc=renderer.xr.getCamera(cam); // pose real de la cabeza (mundo)
@@ -854,11 +854,12 @@ function vrTick(dt){
  if(xrFrames===6){if(headW.y-rig.position.y<.6){yOff=EYE;rig.position.y+=EYE}hudPlace=true;hudWait=0} // sin suelo detectado: sube a la altura de los ojos
  if(xrFrames===6&&vrReturn){const it=vrReturn;vrReturn=null;teleportXR(it);showCard(it)} // al volver del visor 3D: frente a la misma obra
  if(hudFloorShown!==cf){hudFloorShown=cf;updateFloorHud()}
- // panel flotante: se coloca frente a ti y te sigue si te alejas
- if(hudWait>0)hudWait--;
- else if(hudPlace){const l=Math.hypot(headD.x,headD.z);
-  if(l>.1){hud.position.set(headW.x+headD.x/l*1.2,headW.y-.6,headW.z+headD.z/l*1.2);hud.lookAt(headW.x,hud.position.y,headW.z);hudPlace=false}}
- else{const dx=hud.position.x-headW.x,dz=hud.position.z-headW.z;if(dx*dx+dz*dz>9)hudPlace=true}
+ // panel de muñeca: pegado al mando izquierdo; aparece al levantarlo hacia la cara (X/Y o agarre = fijarlo/soltarlo)
+ {let li=-1;xrControllers.forEach((c,i)=>{const sr=c.userData.src;if(sr&&sr.handedness==='left')li=i});
+  if(li<0)xrControllers.forEach((c,i)=>{if(li<0&&c.userData.src)li=i});
+  if(li>=0&&xrGrips[li]&&xrGrips[li]!==hudCtl){hudCtl=xrGrips[li];hudCtlC=xrControllers[li];hudCtl.add(hud);hud.position.set(0,.2,-.05);hud.rotation.set(-1.22,0,0);hud.scale.setScalar(.36)}
+  if(hudCtl){hud.updateWorldMatrix(true,false);hud.getWorldPosition(_p2);_n2.set(0,0,1).transformDirection(hud.matrixWorld);_h2.set(headW.x-_p2.x,headW.y-_p2.y,headW.z-_p2.z).normalize();
+   hud.visible=hudCtl.visible&&(hudPin||modelMode||_n2.dot(_h2)>.4)}else hud.visible=false}
  if(cur){const dx=cur.pos.x-headW.x,dz=cur.pos.z-headW.z;if(dx*dx+dz*dz>64)showCard(null)} // ocultar la ficha al alejarte
  // mandos: palanca izquierda = caminar, derecha = girar, A/B = obra siguiente/anterior, X/Y = traer el panel
  const ss=renderer.xr.getSession();let Ls=null,Rs=null;const gps=[];
@@ -883,8 +884,8 @@ function vrTick(dt){
   const pa=!!(b[4]&&b[4].pressed),pb=!!(b[5]&&b[5].pressed);
   if(modelMode){if((pa&&!btnLatch[ka])||(pb&&!btnLatch[kb]))exitModelVR()}
   else{
-  if(pa&&!btnLatch[ka]){if(r)step(1);else{hudPlace=true;hudWait=0}}
-  if(pb&&!btnLatch[kb]){if(r)step(-1);else{hudPlace=true;hudWait=0}}
+  if(pa&&!btnLatch[ka]){if(r)step(1);else hudPin=!hudPin}
+  if(pb&&!btnLatch[kb]){if(r)step(-1);else hudPin=!hudPin}
   }
   const ps=!!(b[3]&&b[3].pressed),kp=r?'rs':'ls';if(!r)runOn=ps; // pulsar el joystick izquierdo = correr
   
