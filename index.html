@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="utf-8">
@@ -134,7 +134,7 @@ body.guided #joy{display:none!important}
 <canvas id="c"></canvas>
 <div id="hud"><b>MUSEO VIRTUAL</b><span id="loc"></span><span class="kb">WASD/flechas · arrastra para mirar · Shift corre</span><span>Explora libremente y haz clic en cualquier cuadro para acercarte y abrir su ficha</span></div>
 <header id="ui" class="topbar"><div class="brand"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 29V14a11 11 0 0 1 22 0v15M3 29h26M10 29V15a6 6 0 0 1 12 0v14M16 9v20M10 21h12"/></svg><span>MUSEO VIRTUAL</span></div><nav class="links" aria-label="Principal"><button data-go="3d">Obras 3D</button><button data-go="paint">Pinturas</button><button data-go="credits">Créditos</button><a href="https://linktr.ee/lole07" target="_blank" rel="noopener">Contacto</a></nav><button id="vrBtn">ENTRAR EN MODO VR</button><button id="usr" class="ib" aria-label="Mi visita" aria-expanded="false"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg></button><button id="lb" class="ib" aria-label="Buscar obras"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button>
-<div id="visit" class="pop"><div class="row"><button data-f="0">Piso 1</button><button data-f="1">Piso 2</button><button data-f="2">Piso 3</button></div><button id="lt"></button><button id="mu">♪ Música</button><button id="gd" class="on">Modo guiado</button><div class="mob"><button data-go="3d">Obras 3D</button><button data-go="paint">Pinturas</button><button data-go="credits">Créditos</button><a href="https://linktr.ee/lole07" target="_blank" rel="noopener">Contacto</a></div></div></header>
+<div id="visit" class="pop"><div class="row"><button data-f="0">Piso 1</button><button data-f="1">Piso 2</button><button data-f="2">Piso 3</button></div><button id="lt"></button><button id="mu">♪ Música clásica</button><button id="gd" class="on">Modo guiado</button><div class="mob"><button data-go="3d">Obras 3D</button><button data-go="paint">Pinturas</button><button data-go="credits">Créditos</button><a href="https://linktr.ee/lole07" target="_blank" rel="noopener">Contacto</a></div></div></header>
 <div id="credits" role="dialog" aria-modal="true" aria-label="Créditos"><div><h2>CRÉDITOS</h2>Diseñado y desarrollado por<br><a href="https://linktr.ee/lole07" target="_blank" rel="noopener">Jorge Quiñonez</a><br><button id="crx">Cerrar</button></div></div>
 <div id="nav"><button id="pv">◀ Anterior</button><span id="navLbl"></span><button id="nx">Siguiente ▶</button></div><div id="list"></div>
 <div id="card"></div><div id="viewer"><button id="vx">✕ Cerrar</button><button id="vr2">🥽 Volver al museo en VR</button><iframe title="Obra en 3D" allow="autoplay; fullscreen; xr-spatial-tracking" allowfullscreen></iframe></div><div id="joy"><i></i></div><div id="fade"></div>
@@ -461,6 +461,28 @@ function FRAME(grp,w,h){const t=.07,d=.08,bx=(W,H2,D,x,y,z,m)=>{const o=new T.Me
  bx(W,t,d,0,h/2+t/2,.02,frameWhite);bx(W,t,d,0,-h/2-t/2,.02,frameWhite);bx(t,h,d,-w/2-t/2,0,.02,frameWhite);bx(t,h,d,w/2+t/2,0,.02,frameWhite);
  bx(w,l,.06,0,h/2-l/2,.05,frameInner);bx(w,l,.06,0,-h/2+l/2,.05,frameInner);bx(l,h,.06,-w/2+l/2,0,.05,frameInner);bx(l,h,.06,w/2-l/2,0,.05,frameInner);bx(w+.02,h+.02,.04,0,0,.01,linerMat)}
 function blob(g,x,z,r){const m=new T.Mesh(new T.PlaneGeometry(r*2,r*2),shMat);m.rotation.x=-P/2;m.position.set(x,.03,z);g.add(m)}
+
+/* ---- Decoración: árboles procedurales (ramas recursivas, hojas instanciadas) y jarrones ---- */
+const barkMat=new T.MeshStandardMaterial({color:0x5b4030,roughness:.95}),leafMat2=new T.MeshStandardMaterial({color:0xffffff,roughness:.65,side:T.DoubleSide}),soilMat=new T.MeshStandardMaterial({color:0x2a1d14,roughness:1}),vaseMat=new T.MeshStandardMaterial({color:0x34506e,roughness:.22,metalness:.1,side:T.DoubleSide});
+const vaseGeo=new T.LatheGeometry([[0,0],[.1,0],[.16,.06],[.22,.22],[.2,.38],[.11,.5],[.09,.58],[.13,.64]].map(p=>new T.Vector2(p[0],p[1])),40),barkGeo=new T.CylinderGeometry(.62,1,1,8,1),leafGeo=new T.IcosahedronGeometry(.5,1);
+function TREE(g,x,z,seed,hg){
+ const r=rng(seed),br=[],lv=[],V=T.Vector3;
+ const grow=(p,d,len,rad,dep)=>{const e=p.clone().addScaledVector(d,len);br.push([p,e,rad]);if(dep<=1)lv.push(e);if(dep===0)return;
+  const hp=Math.abs(d.y)<.9?new V(0,1,0):new V(1,0,0),pp=new V().crossVectors(d,hp).normalize();
+  for(let k=0;k<3;k++){const c=d.clone().applyAxisAngle(pp,.5+r()*.4).applyAxisAngle(d,k*2.094+r()*.9);c.y+=.18;c.normalize();grow(e,c,len*(.68+r()*.1),rad*.62,dep-1)}};
+ grow(new V(0,0,0),new V(0,1,0),hg*.34,.12,4);
+ const bm=new T.InstancedMesh(barkGeo,barkMat,br.length),lm=new T.InstancedMesh(leafGeo,leafMat2,lv.length),M=new T.Matrix4(),Q=new T.Quaternion(),S=new V(),col=new T.Color();
+ br.forEach(([a,b,rd],i)=>{const d=b.clone().sub(a),l=d.length();Q.setFromUnitVectors(new V(0,1,0),d.normalize());M.compose(a.clone().add(b).multiplyScalar(.5),Q,S.set(rd,l,rd));bm.setMatrixAt(i,M)});
+ lv.forEach((p,i)=>{const sc=.7+r()*.7;Q.setFromEuler(new T.Euler(r()*3,r()*3,r()*3));M.compose(p,Q,S.set(sc*1.3,sc*.8,sc*1.3));lm.setMatrixAt(i,M);lm.setColorAt(i,col.setHSL(.24+r()*.06,.5,.2+r()*.14))});
+ bm.frustumCulled=lm.frustumCulled=false;const tg=new T.Group();tg.position.set(x,.8,z);tg.add(bm);tg.add(lm);g.add(tg);
+ const pot=new T.Mesh(new T.CylinderGeometry(.55,.4,.8,40),potMat);pot.position.set(x,.4,z);g.add(pot);
+ const soil=new T.Mesh(new T.CircleGeometry(.5,32),soilMat);soil.rotation.x=-P/2;soil.position.set(x,.79,z);g.add(soil);
+}
+function DECOR(g,fl,cx,cz,ri){
+ (ri%2?[[11,-11],[-11,11]]:[[-11,-11],[11,11]]).forEach(([dx,dz],k)=>{const x=cx+dx,z=cz+dz;TREE(g,x,z,Math.round(fl.y)*3+ri*7+k*3+5,3.4+((ri+k)%3)*.5);blob(g,x,z,1.7);fl.col.push({a:x-.65,b:x+.65,c:z-.65,d:z+.65})});
+ [[-4.6,-14.3],[4.6,14.3],[-14.3,4.6],[14.3,-4.6]].forEach(([dx,dz])=>{const x=cx+dx,z=cz+dz,pd=new T.Mesh(new T.CylinderGeometry(.3,.33,1,40),marbleMat);pd.position.set(x,.5,z);g.add(pd);
+  const v=new T.Mesh(vaseGeo,vaseMat);v.position.set(x,1,z);v.scale.setScalar(1.1);g.add(v);blob(g,x,z,.7);fl.col.push({a:x-.4,b:x+.4,c:z-.4,d:z+.4})});
+}
 function PROPS(g,fl,cx,cz){const add=(geo,mat,x,y,z)=>{const m=new T.Mesh(geo,mat);m.position.set(x,y,z);g.add(m);return m};
  add(new T.BoxGeometry(3.2,.16,1.1),leather,cx,.52,cz);for(const s of[-1.4,1.4])add(new T.BoxGeometry(.12,.46,.9),woodMat,cx+s,.23,cz);add(new T.BoxGeometry(3,.05,.08),woodMat,cx,.3,cz);
  blob(g,cx,cz,2.2);fl.col.push({a:cx-1.7,b:cx+1.7,c:cz-.65,d:cz+.65});
@@ -507,10 +529,10 @@ const floors=FLOORS.map((F,li)=>{
  for(const c of [-16,16]){box(0,c,.4,5,H-3.6,3.6,false);box(c,0,5,.4,H-3.6,3.6,false)}
  F.rooms.forEach((R,ri)=>{
   const cx=ri%2?16:-16,cz=ri>1?16:-16;
-  const rug=new T.Mesh(new T.PlaneGeometry(14,14),new T.MeshStandardMaterial({color:R.rug,map:rugTex,roughness:1}));
+  const rug=new T.Mesh(new T.PlaneGeometry(9,5.6),new T.MeshStandardMaterial({color:new T.Color(R.rug).lerp(new T.Color(0x4a3426),.4),map:rugTex,roughness:1}));rug.rotation.x=-P/2;rug.position.set(cx,.02,cz);g.add(rug);
   
   const pl=new T.PointLight(0xfff0d0,.55,34);pl.position.set(cx,H-.8,cz);g.add(pl);plights.push(pl);
-  const sl=roomSlots(cx,cz);PROPS(g,fl,cx,cz);
+  const sl=roomSlots(cx,cz);PROPS(g,fl,cx,cz);DECOR(g,fl,cx,cz,ri);
   R.art.forEach((a,i)=>{
    const [x,z,ry]=sl[i],d=SZ[(ri+i)%4],w=a[6]||d[0],h=a[7]||d[1],grp=new T.Group();
    const asset=ART_ASSETS[a[0]]||{};
@@ -933,12 +955,12 @@ function startMusic(){
  const note=(m,t,d,v,ty)=>{const o=ac.createOscillator(),g=ac.createGain();o.type=ty;o.frequency.value=fq(m);o.detune.value=(Math.random()-.5)*10;
   g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(v,t+d*.3);g.gain.exponentialRampToValueAtTime(.0001,t+d);
   o.connect(g);g.connect(lp);o.start(t);o.stop(t+d+.1)};
- const ch=[[48,55,59,64],[45,52,60,64],[41,48,57,64],[43,50,59,62]],pent=[72,74,76,79,81,84];
- let bar=0,next=ac.currentTime+.2;
- setInterval(()=>{while(next<ac.currentTime+4){
-  ch[bar%4].forEach(m=>note(m,next,7.5,.05,'sine'));
-  for(let i=0;i<4;i++)if(Math.random()<.7)note(pent[Math.random()*6|0],next+i*1.6+Math.random()*.5,4,.05,'triangle');
-  next+=6.4;bar++}},1000);
+ const B=[[60,64,67,72,76],[60,62,69,74,77],[59,62,67,74,77],[60,64,67,72,76],[60,64,69,76,81],[60,62,66,69,74],[59,62,67,74,79],[59,60,64,67,72],[57,60,64,67,72],[50,57,62,66,72],[55,59,62,67,71],[55,58,64,67,73],[53,57,62,69,74],[53,55,59,62,65],[52,55,60,67,72],[48,55,60,67,72]],PT=[0,1,2,3,4,2,3,4];
+ const pn=(m,t,v)=>{const o=ac.createOscillator(),o2=ac.createOscillator(),g=ac.createGain(),g2=ac.createGain();o.type='triangle';o2.type='sine';o.frequency.value=fq(m);o2.frequency.value=fq(m)*2;o.detune.value=(Math.random()-.5)*6;g2.gain.value=.25;
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(v,t+.008);g.gain.exponentialRampToValueAtTime(.0001,t+2.4);
+  o2.connect(g2);g2.connect(g);o.connect(g);g.connect(lp);o.start(t);o2.start(t);o.stop(t+2.5);o2.stop(t+2.5)};
+ let bar=0,next=ac.currentTime+.3;
+ setInterval(()=>{while(next<ac.currentTime+3){const c=B[bar%B.length];pn(c[0]-12,next,.07);for(let i=0;i<8;i++)pn(c[PT[i]],next+i*.24+Math.random()*.012,.045+(i%4?0:.015));next+=1.92;bar++}},500);
  musicOn=true;master.gain.linearRampToValueAtTime(.5,ac.currentTime+4);mu.classList.add('on');
 }
 mu.onclick=()=>{
